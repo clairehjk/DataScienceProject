@@ -1,0 +1,260 @@
+---
+title: "UW U 17 class time web scrapping"
+author: "Muhammad Hariz"
+date: "February 27, 2018"
+output: html_document
+---
+
+
+The objective of this lab is to practice web scraping. In this example, we will create a database from NY Time's ongoing article on lies by President Trump.
+
+We select this article because it is well-formatted and serves as a nice introduction to web-scraping. We do not attempt to take or support any political stances by selecting this article.
+
+These are the steps to web-scraping:
+ 1. Request webpage
+ 2. Parse & extract relevant information in page
+ 3. Save data
+ 4. Clean data
+
+For doing our webscraping, we will use the rvest package. Run this line to install it.
+```{r setup}
+if (!require(rvest)) { install.packages('rvest'); require(rvest) } # see https://github.com/hadley/rvest
+library(tibble)
+
+library(stringr) # for doing string manipulations
+ # you can use a different string manipulation library if you want
+```
+
+## Step 1: Requesting the NYT webpage
+
+*TODO* Use the read_html() function to request the webpage. Store it in the nyt variable
+```{r}
+# run this line to understand what read_html() does
+?read_html
+
+url_link <- "https://www.washington.edu/students/timeschd/AUT2017/"
+
+UW_AU17 <- read_html(url_link) #TODO
+```
+
+## Step 2: Parsing & Extract relevant information
+
+The next step is figuring out what data you need. In this case, we want the following data for each entry:
+- date
+- lie (quote)
+- explanation
+- URL (to source)
+
+*TODO*: Inspect the HTML of the webpage and figure out the structure of 1 entry
+
+You should have found something like this:
+<span class="short-desc"><strong>DATE</strong>LIE<span class="short-truth"><a href=URL>EXPLANATION</a></span></span>
+
+
+Let's get a list of all entries we want. We can use the html_nodes() method to do this.
+*TODO*: Use the `html_nodes()` method to get a list of all entries
+```{r}
+?html_nodes
+
+departments <- UW_AU17 %>% html_nodes("a") #TODO: input an appropriate CSS selector into html_nodes
+
+departments_only <- departments[45:425]
+
+firstresult <- departments_only[1]
+
+html_attr(firstresult, "href")
+
+
+
+# getting links to each department page
+getdepartmentlink <- function(result) {
+  url_tag <- html_attr(result, "href")
+  ret <- paste0("https://www.washington.edu/students/timeschd/AUT2017/", url_tag)
+  str_sub(ret)
+}
+random_dept_url <- getdepartmentlink(firstresult)
+
+
+
+
+# grabbing elements form each department link
+readDeptlink <- function(url) {
+  read_html(url)
+}
+
+dept_nodes <- readDeptlink(random_dept_url)
+
+course_name <- (dept_nodes %>% html_nodes("a") %>% html_attr("name"))[!is.na(course_name)]
+
+course_time <- (dept_nodes %>% html_nodes("pre") %>% html_text())[2:length(course_time)]
+
+
+length(course_time)
+
+
+
+
+
+
+
+
+
+
+
+records <- tribble(~url)
+
+for (i in seq(1:length(departments_only))) {
+  result <- departments_only[i]
+  
+  #date <- extract_date(result)
+  #lie <- extract_lie(result)
+  #explanation <- extract_explanation(result)
+  url <- getdepartmentlink(result)
+  
+  records <- add_row(records, url = url)
+  
+}
+
+
+as_tibble(records)
+
+
+```
+
+
+### Extracting Date
+
+Let's practice extracting values from 1 entry at first. Here we do the extraction of date for you.
+*TODO*: Talk with your neighbor to understand the following:
+1. What does `%>%` do? it is the pipe to tell you the next thing to do with the object
+2. Why are we passing "strong" into `html_nodes()`? because we want to get the dates from the webpage
+3. Look at the documentation for `html_text()`. What does it do? What does `trim=TRUE` do?
+4. What does str_c do? Why do we need it? str_c concatinates strings together into one string
+```{r}
+first_result <- results[1]
+
+extract_date <- function(result){
+  date <- result %>% html_nodes("strong") %>% html_text(trim=TRUE)
+  
+  str_c(date, ', 2017') 
+}
+
+extract_date(first_result)
+```
+
+### Extracting Lie
+
+Now let's extract the lie/quote. `xml_contents()` shows you the XML structure of an entry. This should help us figure out how to extract the lie/quote.
+
+*TODO*: Fill in the `extract_lie` method: 
+ 1. Use xml_contents to select the quote/lie and then pipe it to html_text (you'll want to trim leading and trailing spaces).
+ 2. Use the `str_sub` method to remove the leading and trailing quotes
+```{r}
+xml_contents(first_result) # which value is the lie/quote?
+
+# TODO: fill this in!
+extract_lie <- function(result){
+  lie_content <- xml_contents(result)[2]
+  
+  str_sub(lie_content, 2, -3)
+}
+
+extract_lie(first_result) # should something like "I wasn't a fan of Iraq. I didn't want to go into Iraq."
+```
+
+### Extracting Explanation
+*TODO*: Fill in the function to get the explanation for each result (e.g. "He was for an invasion before he was against it"). Don't forget to trim the white space and remove the leading and trailing quotes!
+```{r}
+extract_explanation <- function(result) {
+  explanation <- xml_contents(result)[2] 
+  str_sub(explanation, 2, -3)
+}
+
+extract_explanation(first_result) # should return something like "He was for an invasion before he was against it."
+```
+
+### Extracting URL
+*TODO*: Fill in the function get the URL to the source of the explanation.
+_hint_: check out the `html_node()` and `html_attr()` methods
+
+```{r}
+extract_url <- function(result) {
+  url_tag <- html_attr(html_node(result, "a"), "href")
+  str_sub(url_tag)
+}
+
+extract_url(first_result) # should return something like "https://www.buzzfeed.com/andrewkaczynski/in-2002-donald-trump-said-he-supported-invading-iraq-on-the"
+```
+
+## Step 3: Save the data
+Now let's put it all together! Save the date, lie/quote, explanation, and url from each result in a dataframe "df_trump".
+*TODO*: Complete the for-loop to store the data in "df_trump"
+```{r}
+str_sub(html_text(xml_contents(first_result)[1], "strong"), 0, -3)
+records <- tribble( ~date, ~lie, ~explanation, ~url)
+
+for (i in seq(1:length(results))) {
+  result <- results[i]
+  
+  date <- extract_date(result)
+  lie <- extract_lie(result)
+  explanation <- extract_explanation(result)
+  url <- extract_url(result)
+  
+  records <- add_row(records, date = date, lie = lie, explanation = explanation, url = url)
+  
+}
+
+
+as_tibble(records)
+```
+
+
+
+
+
+
+```{r}
+# libraries for code
+library(arm)
+library(statisticalModeling)
+library(mosaicModel)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+require(broom)
+
+setwd("~/INFO 370/team_tomagotchu_script")
+
+class_survey <- read.csv("dataset/class_survey_clean1.csv")
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+# skeleton for our code
+
+# model on students from class survey datasets, then predict 
+# two parts modelling:
+# 1 for their 8:30 classes
+# 2 for their non 8:30 classes
+
+
+
+```
+
+
+
+
+
+```{r}
+
+```
+

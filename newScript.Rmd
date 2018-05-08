@@ -1,0 +1,136 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+setwd("C:/Users/zzl19/Desktop/INFO370/team_tomagotchu_script")
+survey <- read.csv(file = "dataset/class_survey_clean1.csv")
+library(ggplot2)
+library(statisticalModeling)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(caret)
+if(!require(tidyverse)){install.packages("tidyverse"); library(tidyverse)} 
+if(!require(modelr)){install.packages("modelr"); library(modelr)} # modeling package
+if(!require(splines)){install.packages("splines"); require(splines)} # for natural splines ("polynomial") models
+library(visreg)
+library(mosaicModel)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+survey$learn_effectiveness_diff <- survey$learn_effectiveness_n830 - survey$learn_effectiveness_830
+survey$increase_in_GPA_from_non830am_to_830am <- survey$gpa_n830 - survey$gpa_830
+
+
+survey$commute_time_diff <- survey$commute_time_n830 - survey$commute_time_830
+
+
+survey_diff <- survey %>% select(increase_in_GPA_from_non830am_to_830am)
+
+survey_diff$learn_eff_diff <- survey$learn_effectiveness_n830 - survey$learn_effectiveness_830
+survey_diff$commute_time_diff <- survey$commute_time_n830 - survey$commute_time_830
+
+survey_diff$prior_knowl_percent <- survey$prior_knowl_percent_n830 - survey$prior_knowl_percent
+survey_diff$sleep_total_diff <- survey$sleep_total_n830 - survey$sleep_total_830
+```
+
+
+
+
+spilit the data
+```{r}
+n_df <- 30 # number of degrees of freedom to try out
+n_data <- nrow(survey_diff)
+split <- 0.9
+train_indices <- sample(seq(1, n_data), size = n_data*split) 
+
+train_data <- survey_diff[train_indices,]
+test_data <- survey_diff[-train_indices,]
+
+model <- lm(increase_in_GPA_from_non830am_to_830am ~ prior_knowl_percent + sleep_total_diff + commute_time_diff, data = train_data)
+
+data_with_model_output <- augment(model, data = train_data)
+
+visreg(model, "prior_knowl_percent")
+visreg(model, "sleep_total_diff")
+visreg(model, "commute_time_diff")
+
+fmodel(model)
+
+mod_plot(model)
+
+```
+
+```{r}
+model2 <- lm(learn_eff_diff ~ prior_knowl_percent + sleep_total_diff + commute_time_diff, data = train_data)
+data_with_model2_output <- augment(model, data = train_data)
+
+visreg(model2, "prior_knowl_percent", type = "conditional")
+visreg(model2, "prior_knowl_percent", type = "contrast")
+visreg(model2, "sleep_total_diff")
+visreg(model2, "commute_time_diff")
+
+fmodel(model2)
+
+mod_plot(model2)
+
+```
+
+
+```{r}
+results <- list()
+
+for(degf in 1:n_df) {
+  # this is fitting the spline model
+  results[[degf]] <- lm(increase_in_GPA_from_non830am_to_830am ~ ns(prior_knowl_percent, sleep_total_diff, commute_time_diff, df = degf), data=train_data)
+}
+
+# output for model of degree 1
+results[[1]]
+grid_train <- train_data %>%
+  data_grid(prior_knowl_percent + sleep_total_diff + commute_time_diff) %>%
+  gather_predictions(results[[1]], results[[6]], results[[30]], .pred="y")
+```
+
+
+
+```{r}
+model <- lm(increase_in_GPA_from_non830am_to_830am ~ prior_knowl_percent + sleep_total_diff + commute_time_diff, data = train_data)
+```
+
+
+
+```{r}
+col_means <- function(df) {
+  numeric <- sapply(df, is.numeric)
+  numeric_cols <- df[, numeric]
+
+  data.frame(lapply(numeric_cols, mean))
+}
+
+col_means(mtcars)
+col_means(mtcars[, 0])
+col_means(mtcars[0, ])
+col_means(mtcars[, "mpg", drop = F])
+col_means(1:10)
+col_means(as.matrix(mtcars))
+col_means(as.list(mtcars))
+
+mtcars2 <- mtcars
+mtcars2[-1] <- lapply(mtcars2[-1], as.character)
+col_means(mtcars2)
+```
+
